@@ -2,7 +2,7 @@ terraform {
   cloud {
     organization = "yu-feng-tfe"
     workspaces {
-      name = "db-iam"
+      name = "spire-security-sandbox-tf"
     }
   }
 
