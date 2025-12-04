@@ -21,3 +21,8 @@ output "oidc_issuer_url" {
 output "rules_bucket_name" {
   value = aws_s3_bucket.rules.bucket
 }
+
+output "ecr_repository_url" {
+  description = "The URL of the ECR repository"
+  value       = aws_ecr_repository.plugin.repository_url
+}

@@ -64,7 +64,7 @@ resource "aws_iam_role_policy_attachment" "iam_operator_full" {
 
 resource "aws_iam_role_policy_attachment" "audit_view_only" {
   role       = aws_iam_role.security_audit.name
-  policy_arn = "arn:aws:iam::aws:policy/ViewOnlyAccess"
+  policy_arn = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
 }
 
 resource "aws_iam_role_policy_attachment" "audit_security_audit" {
