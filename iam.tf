@@ -7,9 +7,15 @@ resource "aws_iam_role" "spire_server" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+          Federated = module.eks.oidc_provider_arn
         }
-        Action = "sts:AssumeRole"
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${module.eks.oidc_provider}:sub" = "system:serviceaccount:spire:spire-server",
+            "${module.eks.oidc_provider}:aud" = "sts.amazonaws.com"
+          }
+        }
       }
     ]
   })
