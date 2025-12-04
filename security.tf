@@ -1,0 +1,48 @@
+resource "aws_iam_user" "auditor" {
+  name = "security-auditor"
+}
+
+resource "aws_iam_access_key" "auditor_key" {
+  user = aws_iam_user.auditor.name
+}
+
+resource "aws_iam_user_policy" "auditor_assume" {
+  name = "AllowAssumeAuditRole"
+  user = aws_iam_user.auditor.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "sts:AssumeRole"
+      Resource = aws_iam_role.security_audit.arn
+    }]
+  })
+}
+
+resource "aws_iam_role" "security_audit" {
+  name = "SecurityAuditRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_user.auditor.arn
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "audit_view_only" {
+  role       = aws_iam_role.security_audit.name
+  policy_arn = "arn:aws:iam::aws:policy/ViewOnlyAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "audit_security_audit" {
+  role       = aws_iam_role.security_audit.name
+  policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
+}
