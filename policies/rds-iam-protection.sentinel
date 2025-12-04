@@ -1,0 +1,60 @@
+# This policy scans all IAM Policy documents in the Terraform plan.
+# It fails if any policy attempts to grant rds-db:connect or rds:AddTags*.
+
+import "tfplan/v2" as tfplan
+import "json"
+
+forbidden_actions = [
+  "rds-db:connect",             # Allows login to DB as IAM User
+  "rds:AddTagsToResource",      # Allows changing tags (privilege escalation)
+  "rds:RemoveTagsFromResource", # Allows removing security tags
+  "rds:ModifyDBInstance",       # Can be used to reset tags/passwords
+]
+
+is_forbidden = func(action) {
+  for forbidden_actions as forbidden {
+    if action matches "(?i)" + forbidden { return true }
+  }
+  return false
+}
+
+iam_resources = filter tfplan.resource_changes as _, rc {
+  (rc.type is "aws_iam_policy" or
+   rc.type is "aws_iam_role_policy" or
+   rc.type is "aws_iam_user_policy" or
+   rc.type is "aws_iam_group_policy") and
+  (rc.change.actions contains "create" or rc.change.actions contains "update")
+}
+
+violations = {}
+
+for iam_resources as address, rc {
+
+  raw_policy = rc.change.after.policy else rc.change.after.policy_document else "{}"
+  policy_doc = json.unmarshal(raw_policy)
+
+  for policy_doc.Statement as stmt {
+
+    if stmt.Effect is "Allow" {
+
+      actions = []
+      if types.type_of(stmt.Action) is "string" {
+        append(actions, stmt.Action)
+      } else {
+        actions = stmt.Action
+      }
+
+      for actions as action {
+        if is_forbidden(action) {
+          violations[address] = "Grants forbidden action: " + action
+        }
+      }
+    }
+  }
+}
+
+for violations as address, msg {
+  print("VIOLATION [" + address + "]: " + msg)
+}
+
+main = rule { length(violations) == 0 }

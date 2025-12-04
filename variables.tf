@@ -9,3 +9,8 @@ variable "spiffe_trust_domain" {
   type        = string
   default     = "example.org"
 }
+
+variable "sandbox_ou_id" {
+  type = string
+  default = "ou-2355-x5uevxt7"
+}

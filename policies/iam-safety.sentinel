@@ -1,0 +1,24 @@
+import "tfplan/v2" as tfplan
+
+forbidden_policies = [
+  "arn:aws:iam::aws:policy/AdministratorAccess",
+  "arn:aws:iam::aws:policy/IAMFullAccess",
+]
+
+iam_policy_attachments = filter tfplan.resource_changes as _, rc {
+  rc.type is "aws_iam_role_policy_attachment" and
+  (rc.change.actions contains "create" or rc.change.actions contains "update")
+}
+
+# We use 'rc.change.after.policy_arn' to see what the value will be *after* apply
+admin_violations = filter iam_policy_attachments as _, rc {
+  rc.change.after.policy_arn in forbidden_policies
+}
+
+for admin_violations as address, rc {
+  print("VIOLATION: The resource " + address + " attempts to attach a forbidden Admin policy.")
+}
+
+main = rule {
+  length(admin_violations) == 0
+}
