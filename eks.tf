@@ -18,7 +18,7 @@ module "eks" {
       max_size     = 3
       desired_size = 2
 
-      instance_types = ["t3.medium"]
+      instance_types = ["t3.medium", "t3a.medium", "t2.medium"]
       capacity_type  = "SPOT"
 
       iam_role_additional_policies = {
