@@ -32,3 +32,15 @@ spec:
     - "k8s:ns:app"
     - "k8s:sa:test-workload"
   jwtSVIDTTL: "15m"
+---
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterStaticEntry
+metadata:
+  name: denied-workload
+spec:
+  spiffeID: spiffe://example.org/ns/app/sa/denied-workload
+  parentID: spiffe://example.org/spire-agent
+  selectors:
+    - "k8s:ns:app"
+    - "k8s:sa:denied-workload"
+  jwtSVIDTTL: "15m"

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-workload
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-workload
+  template:
+    metadata:
+      labels:
+        app: test-workload
+    spec:
+      serviceAccountName: test-workload
+      containers:
+        - name: app
+          image: amazon/aws-cli:latest
+          command: ["/bin/bash", "/scripts/run.sh"]
+          env:
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: DB_USER
+              value: "testuser"
+            - name: RDS_HOST
+              value: "checkout-db.cq9kwcoaqpyf.us-east-1.rds.amazonaws.com"
+            - name: ROLE_ARN
+              value: "arn:aws:iam::074122282848:role/DatabaseAccessRole"
+          volumeMounts:
+            - name: spiffe-certs
+              mountPath: /run/spiffe/jwt
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+        - name: spiffe-helper
+          image: ghcr.io/spiffe/spiffe-helper:0.10.1
+          args: ["-config", "/etc/spiffe-helper/helper.conf"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/spiffe-helper
+            - name: spiffe-certs
+              mountPath: /run/spiffe/jwt
+            - name: socket
+              mountPath: /run/spire/agent-sockets
+      volumes:
+        - name: config
+          configMap:
+            name: spiffe-helper-config
+        - name: scripts
+          configMap:
+            name: db-connect-script
+            defaultMode: 0755
+        - name: spiffe-certs
+          emptyDir: {}
+        - name: socket
+          hostPath:
+            path: /run/spire/agent-sockets
+            type: Directory
