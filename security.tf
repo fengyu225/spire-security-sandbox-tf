@@ -15,7 +15,10 @@ resource "aws_iam_user_policy" "auditor_assume" {
     Statement = [{
       Effect   = "Allow"
       Action   = "sts:AssumeRole"
-      Resource = aws_iam_role.security_audit.arn
+      Resource = [
+        aws_iam_role.security_audit.arn,
+        aws_iam_role.iam_operator.arn
+      ]
     }]
   })
 }
@@ -35,6 +38,28 @@ resource "aws_iam_role" "security_audit" {
       }
     ]
   })
+}
+
+resource "aws_iam_role" "iam_operator" {
+  name = "IAMOperatorRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_user.auditor.arn
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "iam_operator_full" {
+  role       = aws_iam_role.iam_operator.name
+  policy_arn = "arn:aws:iam::aws:policy/IAMFullAccess"
 }
 
 resource "aws_iam_role_policy_attachment" "audit_view_only" {
