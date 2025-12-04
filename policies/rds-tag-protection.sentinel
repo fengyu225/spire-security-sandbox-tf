@@ -24,9 +24,8 @@ for rds_resources as address, rc {
       # VIOLATION 1: Tag was removed
       if tag_key not in keys(tags_after) {
          violations[address] = "Removed protected tag: " + tag_key
-      }
-      # VIOLATION 2: Tag value was changed
-      else if tags_after[tag_key] != tags_before[tag_key] {
+      } else if tags_after[tag_key] != tags_before[tag_key] {
+         # VIOLATION 2: Tag value was changed
          violations[address] = "Modified protected tag: " + tag_key + " (Old: " + tags_before[tag_key] + ", New: " + tags_after[tag_key] + ")"
       }
     }
