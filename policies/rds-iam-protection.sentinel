@@ -3,6 +3,7 @@
 
 import "tfplan/v2" as tfplan
 import "json"
+import "types"
 
 forbidden_actions = [
   "rds-db:connect",             # Allows login to DB as IAM User
@@ -10,6 +11,16 @@ forbidden_actions = [
   "rds:RemoveTagsFromResource", # Allows removing security tags
   "rds:ModifyDBInstance",       # Can be used to reset tags/passwords
 ]
+
+to_list = func(v) {
+  if types.type_of(v) is "list" {
+    return v
+  } else if types.type_of(v) is "undefined" or types.type_of(v) is "null" {
+    return []
+  } else {
+    return [v]
+  }
+}
 
 is_forbidden = func(action) {
   for forbidden_actions as forbidden {
@@ -31,22 +42,25 @@ violations = {}
 for iam_resources as address, rc {
 
   raw_policy = rc.change.after.policy else rc.change.after.policy_document else "{}"
+
+  if raw_policy is "{}" or raw_policy is "" { continue }
+
   policy_doc = json.unmarshal(raw_policy)
 
-  for policy_doc.Statement as stmt {
+  if "Statement" in keys(policy_doc) {
 
-    if stmt.Effect is "Allow" {
+    statements = to_list(policy_doc.Statement)
 
-      actions = []
-      if types.type_of(stmt.Action) is "string" {
-        append(actions, stmt.Action)
-      } else {
-        actions = stmt.Action
-      }
+    for statements as stmt {
 
-      for actions as action {
-        if is_forbidden(action) {
-          violations[address] = "Grants forbidden action: " + action
+      if stmt.Effect is "Allow" {
+
+        actions = to_list(stmt.Action)
+
+        for actions as action {
+          if is_forbidden(action) {
+            violations[address] = "Grants forbidden action: " + action
+          }
         }
       }
     }
