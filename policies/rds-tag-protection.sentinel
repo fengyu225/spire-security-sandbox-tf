@@ -1,0 +1,40 @@
+# This policy ensures that for any existing RDS Database.
+# The tags used for SPIRE integration (DB, DBuser, Target) are never changed or removed.
+
+import "tfplan/v2" as tfplan
+
+protected_tags = ["DB", "DBuser", "Target"]
+
+rds_resources = filter tfplan.resource_changes as _, rc {
+  (rc.type is "aws_db_instance" or rc.type is "aws_rds_cluster") and
+  rc.change.actions contains "update"
+}
+
+violations = {}
+
+for rds_resources as address, rc {
+
+  tags_after = rc.change.after.tags else {}
+  tags_before = rc.change.before.tags else {}
+
+  for protected_tags as tag_key {
+
+    if tag_key in keys(tags_before) {
+
+      # VIOLATION 1: Tag was removed
+      if tag_key not in keys(tags_after) {
+         violations[address] = "Removed protected tag: " + tag_key
+      }
+      # VIOLATION 2: Tag value was changed
+      else if tags_after[tag_key] != tags_before[tag_key] {
+         violations[address] = "Modified protected tag: " + tag_key + " (Old: " + tags_before[tag_key] + ", New: " + tags_after[tag_key] + ")"
+      }
+    }
+  }
+}
+
+for violations as address, msg {
+  print("VIOLATION [" + address + "]: " + msg)
+}
+
+main = rule { length(violations) == 0 }
