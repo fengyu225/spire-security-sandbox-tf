@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: spire
+data:
+  init.sql: |
+    CREATE SCHEMA IF NOT EXISTS spire;
+
+    -- Grant privileges
+    GRANT ALL PRIVILEGES ON DATABASE "spire-db" TO spire;
+    GRANT ALL PRIVILEGES ON SCHEMA spire TO spire;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA spire TO spire;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA spire TO spire;
+    GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA spire TO spire;
+
+    -- Set default privileges for future tables
+    ALTER DEFAULT PRIVILEGES IN SCHEMA spire GRANT ALL ON TABLES TO spire;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA spire GRANT ALL ON SEQUENCES TO spire;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA spire GRANT EXECUTE ON FUNCTIONS TO spire;
+
+    -- Create extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: spire
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          env:
+            - name: POSTGRES_DB
+              value: spire-db
+            - name: POSTGRES_USER
+              value: spire
+            - name: POSTGRES_PASSWORD
+              value: password
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: init-script
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init-script
+          configMap:
+            name: postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: spire
+spec:
+  ports:
+    - port: 5432
+  selector:
+    app: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica1
+  namespace: spire
+spec:
+  ports:
+    - port: 5432
+  selector:
+    app: postgres

@@ -1,0 +1,34 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: oidc-provider-spiffeid
+spec:
+  spiffeIDTemplate: "spiffe://example.org/oidc-provider"
+  podSelector:
+    matchLabels:
+      app: spire-server
+  workloadSelectorTemplates:
+    - "k8s:ns:oidc-provider"
+    - "k8s:sa:oidc-provider"
+---
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterStaticEntry
+metadata:
+  name: spire-agent
+spec:
+  spiffeID: spiffe://example.org/spire-agent
+  parentID: spiffe://example.org/spire/server
+  selectors:
+    - "k8s_psat:cluster:spire-demo"
+---
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterStaticEntry
+metadata:
+  name: test-workload
+spec:
+  spiffeID: spiffe://example.org/ns/app/sa/test-workload
+  parentID: spiffe://example.org/spire-agent
+  selectors:
+    - "k8s:ns:app"
+    - "k8s:sa:test-workload"
+  jwtSVIDTTL: "15m"
