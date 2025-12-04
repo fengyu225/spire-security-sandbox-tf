@@ -57,7 +57,7 @@ resource "aws_iam_role" "db_access" {
         ]
         Condition = {
           StringEquals = {
-            "aws:RequestTag/Target" = ["aurora"],
+            "aws:RequestTag/Target" = ["aurora", "rds"],
             "${local.s3_host}:aud"  = "SPIFFE/${var.spiffe_trust_domain}"
           }
         }
