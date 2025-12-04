@@ -96,6 +96,13 @@ resource "aws_s3_object" "test_workload_rule" {
       db_type        = "aurora"
       db_cluster     = "payment-db"
       db_user        = "read-write-user-1"
+    },
+    {
+      spiffe_id      = "spiffe://${local.workload_spiffe_path}"
+      aws_account_id = data.aws_caller_identity.current.account_id
+      db_type        = "rds"
+      db_cluster     = aws_db_instance.default.resource_id
+      db_user        = "testuser"
     }
   ])
 }
