@@ -69,7 +69,7 @@ resource "aws_s3_object" "openid_config" {
 # SPIRE Credential Authorization Bucket
 # ===========================================
 locals {
-  rules_bucket_name = "spire-auth-rules-${data.aws_caller_identity.current.account_id}"
+  rules_bucket_name    = "spire-auth-rules-${data.aws_caller_identity.current.account_id}"
   workload_spiffe_path = "example.org/ns/app/sa/test-workload"
 }
 

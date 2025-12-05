@@ -26,3 +26,14 @@ output "ecr_repository_url" {
   description = "The URL of the ECR repository"
   value       = aws_ecr_repository.plugin.repository_url
 }
+
+output "auditor_console_password" {
+  description = "Initial Password for the External Auditor"
+  value       = aws_iam_user_login_profile.auditor_console.password
+  sensitive   = true # Click 'Sensitive' in TFC UI to reveal
+}
+
+output "auditor_console_url" {
+  description = "AWS Console Sign-in Link"
+  value       = "https://${data.aws_caller_identity.current.account_id}.signin.aws.amazon.com/console"
+}
