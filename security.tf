@@ -13,8 +13,8 @@ resource "aws_iam_user_policy" "auditor_assume" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = "sts:AssumeRole"
+      Effect = "Allow"
+      Action = "sts:AssumeRole"
       Resource = [
         aws_iam_role.security_audit.arn,
         aws_iam_role.iam_operator.arn
@@ -55,6 +55,11 @@ resource "aws_iam_role" "iam_operator" {
       }
     ]
   })
+}
+
+resource "aws_iam_user_login_profile" "auditor_console" {
+  user                    = aws_iam_user.auditor.name
+  password_reset_required = true
 }
 
 resource "aws_iam_role_policy_attachment" "iam_operator_full" {

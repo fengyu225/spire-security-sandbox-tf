@@ -11,6 +11,6 @@ variable "spiffe_trust_domain" {
 }
 
 variable "sandbox_ou_id" {
-  type = string
+  type    = string
   default = "ou-2355-x5uevxt7"
 }
