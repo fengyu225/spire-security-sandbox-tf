@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: boundary-test-sa
+  namespace: app
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::074122282848:role/BoundaryTestRole
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: boundary-test-script
+  namespace: app
+data:
+  run.sh: |
+    #!/bin/bash
+    set +e 
+
+    echo "[Init] Installing PostgreSQL client..."
+    yum install -y postgresql15 || yum install -y postgresql
+
+    echo "=================================================="
+    echo "TEST: Verifying Permission Boundary Enforcement"
+    echo "ROLE: BoundaryTestRole"
+    echo "EXPECTATION: Connection must be DENIED (PAM Authentication Failed)"
+    echo "=================================================="
+
+    # Set DB_USER if not provided in env
+    DB_USER=${DB_USER:-testuser}
+
+    while true; do
+      echo "--------------------------------------------------"
+      echo "[Step 1] Generating RDS Auth Token..."
+      PGPASSWORD=$(aws rds generate-db-auth-token \
+        --hostname "$RDS_HOST" \
+        --port 5432 \
+        --region "$AWS_REGION" \
+        --username "$DB_USER")
+    
+      export PGPASSWORD
+
+      echo "[Step 2] Attempting connection to $RDS_HOST..."
+    
+      # If the Boundary is working, RDS will reject the token because the 
+      # role effectively lacks 'rds-db:connect' due to the explicit deny.
+      psql "host=$RDS_HOST port=5432 user=$DB_USER dbname=checkoutdb sslmode=require" \
+        -c "SELECT current_user;" > /tmp/output.txt 2>&1
+    
+      RET_CODE=$?
+      OUTPUT=$(cat /tmp/output.txt)
+
+      if [ $RET_CODE -eq 0 ]; then
+        echo "CRITICAL FAILURE: Connection Succeeded! The Boundary is BROKEN."
+      else
+        # We expect a FATAL error regarding PAM authentication
+        if [[ "$OUTPUT" == *"PAM authentication failed"* ]] || [[ "$OUTPUT" == *"FATAL"* ]]; then
+           echo "SUCCESS: Connection Denied by RDS as expected."
+           echo " (Error: $OUTPUT)"
+        else
+           echo "UNCLEAR: Connection failed, but maybe for network reasons?"
+           echo " (Error: $OUTPUT)"
+        fi
+      fi
+
+      echo "Sleeping 10s..."
+      sleep 10
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boundary-test-workload
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: boundary-test
+  template:
+    metadata:
+      labels:
+        app: boundary-test
+    spec:
+      serviceAccountName: boundary-test-sa
+      containers:
+        - name: app
+          image: amazon/aws-cli:latest
+          command: ["/bin/bash", "/scripts/run.sh"]
+          env:
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: DB_USER
+              value: "testuser"
+            - name: RDS_HOST
+              value: "checkout-db.cq9kwcoaqpyf.us-east-1.rds.amazonaws.com"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: boundary-test-script
+            defaultMode: 0755
