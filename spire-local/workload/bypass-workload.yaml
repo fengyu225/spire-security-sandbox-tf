@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bypass-workload
+  namespace: app
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::074122282848:role/BypassSpireRole
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bypass-script
+  namespace: app
+data:
+  run.sh: |
+    #!/bin/bash
+    set +e
+
+    echo "[Init] Installing Postgres client..."
+    yum install -y postgresql15 || yum install -y postgresql
+
+    echo "=================================================="
+    echo "TEST: Attempting connection as 'BypassSpireRole'"
+    echo "EXPECTATION: Connection should be DENIED by SCP"
+    echo "=================================================="
+
+    while true; do
+      echo "[Step 1] Generating Authentication Token..."
+      PGPASSWORD=$(aws rds generate-db-auth-token \
+        --hostname "$RDS_HOST" \
+        --port 5432 \
+        --region "$AWS_REGION" \
+        --username "$DB_USER")
+    
+      export PGPASSWORD
+
+      echo "[Step 2] Connecting to DB Resource: $DB_RESOURCE_ID"
+    
+      psql "host=$RDS_HOST port=5432 user=$DB_USER dbname=checkoutdb sslmode=require" \
+        -c "SELECT current_user;"
+    
+      RET_CODE=$?
+
+      if [ $RET_CODE -eq 0 ]; then
+        echo "FAILURE: Connection Succeeded! The SCP is NOT working."
+      else
+        echo "SUCCESS: Connection Failed as expected (SCP is active)."
+      fi
+    
+      echo "Sleeping 10s..."
+      sleep 10
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bypass-workload
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bypass-workload
+  template:
+    metadata:
+      labels:
+        app: bypass-workload
+    spec:
+      serviceAccountName: bypass-workload
+      containers:
+        - name: app
+          image: amazon/aws-cli:latest
+          command: ["/bin/bash", "/scripts/run.sh"]
+          env:
+            - name: AWS_REGION
+              value: "us-east-1"
+            - name: DB_USER
+              value: "testuser"
+            - name: DB_RESOURCE_ID
+              value: "db-RPRRV425HSYWZPCF3LXOCIDUVA"
+            - name: RDS_HOST
+              value: "checkout-db.cq9kwcoaqpyf.us-east-1.rds.amazonaws.com"
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: bypass-script
+            defaultMode: 0755

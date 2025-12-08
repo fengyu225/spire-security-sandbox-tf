@@ -8,3 +8,4 @@ resources:
   - rbac/serviceaccounts.yaml
   - deployments/test-workload.yaml
   - deployments/denied-workload.yaml
+  - bypass-workload.yaml
