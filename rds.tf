@@ -45,8 +45,9 @@ resource "aws_db_instance" "default" {
   multi_az               = false
 
   tags = {
-    Target = "rds"
-    DB     = "checkout-db"
-    DBuser = "testuser"
+    Target     = "rds"
+    DB         = "checkout-db"
+    DBuser     = "testuser"
+    managed-by = "spire"
   }
 }
