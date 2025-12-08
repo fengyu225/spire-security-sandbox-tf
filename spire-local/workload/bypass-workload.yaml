@@ -31,14 +31,14 @@ data:
         --port 5432 \
         --region "$AWS_REGION" \
         --username "$DB_USER")
-    
+
       export PGPASSWORD
 
       echo "[Step 2] Connecting to DB Resource: $DB_RESOURCE_ID"
-    
+
       psql "host=$RDS_HOST port=5432 user=$DB_USER dbname=checkoutdb sslmode=require" \
         -c "SELECT current_user;"
-    
+
       RET_CODE=$?
 
       if [ $RET_CODE -eq 0 ]; then
@@ -46,7 +46,7 @@ data:
       else
         echo "SUCCESS: Connection Failed as expected (SCP is active)."
       fi
-    
+
       echo "Sleeping 10s..."
       sleep 10
     done

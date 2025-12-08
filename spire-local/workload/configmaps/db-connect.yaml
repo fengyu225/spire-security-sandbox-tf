@@ -6,22 +6,21 @@ metadata:
 data:
   run.sh: |
     #!/bin/bash
-    set -e 
-
+    set -e
     echo "[Init] Installing dependencies (PostgreSQL client & jq)..."
     yum install -y postgresql15 jq || yum install -y postgresql jq
 
     echo "[Init] Waiting for SPIRE token..."
     while [ ! -f /run/spiffe/jwt/svid.jwt ]; do sleep 1; done
-    
+
     set +e
 
     while true; do
       echo "=================================================="
       echo "[$(date)] Starting Connection Attempt"
-    
+
       JWT=$(cat /run/spiffe/jwt/svid.jwt)
-    
+
       echo "[Step 1] Assuming IAM Role: $ROLE_ARN"
       CREDS=$(aws sts assume-role-with-web-identity \
         --role-arn "$ROLE_ARN" \
@@ -29,7 +28,7 @@ data:
         --web-identity-token "$JWT" \
         --query "Credentials" \
         --output json)
-    
+
       if [ -z "$CREDS" ]; then
         echo "FAILURE: Could not assume IAM Role (Check SPIRE/Trust Policy)"
         sleep 10
@@ -46,7 +45,7 @@ data:
         --port 5432 \
         --region "$AWS_REGION" \
         --username "$DB_USER")
-    
+
       if [ -z "$PGPASSWORD" ]; then
         echo "FAILURE: Failed to generate RDS Token (Check IAM Permissions)"
         sleep 10
@@ -57,13 +56,13 @@ data:
       psql "host=$RDS_HOST port=5432 user=$DB_USER dbname=checkoutdb sslmode=require" \
         -c "SELECT version();" \
         -c "SELECT current_user;"
-    
+
       if [ $? -eq 0 ]; then
         echo "SUCCESS: Connection Established!"
       else
         echo "FAILURE: Connection Denied by Database."
       fi
-    
+
       echo "Sleeping 10s..."
       sleep 10
     done

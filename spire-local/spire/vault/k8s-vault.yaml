@@ -40,12 +40,17 @@ data:
   vault.hcl: |
     ui = true
     disable_mlock = true
+    api_addr = "https://vault:8200"
+
     storage "file" {
       path = "/vault/data"
     }
+
     listener "tcp" {
-      address     = "0.0.0.0:8200"
-      tls_disable = "true"
+      address       = "0.0.0.0:8200"
+      tls_disable   = false
+      tls_cert_file = "/vault/tls/tls.crt"
+      tls_key_file  = "/vault/tls/tls.key"
     }
 ---
 apiVersion: apps/v1
@@ -69,7 +74,17 @@ spec:
       containers:
         - name: vault
           image: hashicorp/vault:1.15
+          command: ["vault"]
           args: ["server", "-config=/vault/config/vault.hcl"]
+          env:
+            - name: SKIP_CHOWN
+              value: "true"
+            - name: SKIP_SETCAP
+              value: "true"
+            - name: VAULT_ADDR
+              value: "https://127.0.0.1:8200"
+            - name: VAULT_SKIP_VERIFY
+              value: "true"
           securityContext:
             capabilities:
               add: ["IPC_LOCK"]
@@ -80,9 +95,15 @@ spec:
               mountPath: /vault/data
             - name: vault-config
               mountPath: /vault/config
+            - name: vault-tls
+              mountPath: /vault/tls
+              readOnly: true
           readinessProbe:
             exec:
-              command: ["/bin/sh", "-c", "vault status -tls-skip-verify"]
+              command:
+                - /bin/sh
+                - -c
+                - "VAULT_ADDR='https://127.0.0.1:8200' VAULT_SKIP_VERIFY=true vault status"
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 30
@@ -90,6 +111,10 @@ spec:
         - name: vault-config
           configMap:
             name: vault-config
+        - name: vault-tls
+          secret:
+            secretName: vault-tls
+            optional: true  # Allow pod to start before secret exists
   volumeClaimTemplates:
     - metadata:
         name: vault-data
@@ -105,6 +130,7 @@ metadata:
   name: vault
   namespace: spire
 spec:
+  publishNotReadyAddresses: true
   ports:
     - port: 8200
       targetPort: 8200
@@ -120,37 +146,79 @@ data:
   init.sh: |
     #!/bin/sh
     set -e
-    
+
     apk add --no-cache openssl curl jq
 
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
     chmod +x kubectl
     mv kubectl /usr/local/bin/
 
-    export VAULT_ADDR='http://vault:8200'
-    export VAULT_SKIP_VERIFY='true'
+    echo "Checking for existing Vault TLS certificates..."
+    if ! kubectl get secret vault-tls -n spire >/dev/null 2>&1; then
+      echo "Generating Vault TLS certificates..."
+      mkdir -p /tmp/vault-tls
+
+      # Generate CA
+      openssl genrsa -out /tmp/vault-tls/ca.key 4096
+      openssl req -new -x509 -days 3650 -key /tmp/vault-tls/ca.key \
+        -out /tmp/vault-tls/ca.crt \
+        -subj "/CN=Vault CA/O=SPIRE"
+
+      # Generate Vault server certificate
+      openssl genrsa -out /tmp/vault-tls/tls.key 4096
+      openssl req -new -key /tmp/vault-tls/tls.key \
+        -out /tmp/vault-tls/tls.csr \
+        -subj "/CN=vault/O=SPIRE" \
+        -addext "subjectAltName=DNS:vault,DNS:vault.spire,DNS:vault.spire.svc,DNS:vault.spire.svc.cluster.local,DNS:localhost,IP:127.0.0.1"
+
+      openssl x509 -req -in /tmp/vault-tls/tls.csr \
+        -CA /tmp/vault-tls/ca.crt -CAkey /tmp/vault-tls/ca.key -CAcreateserial \
+        -out /tmp/vault-tls/tls.crt -days 3650 -sha256 \
+        -extfile <(printf "subjectAltName=DNS:vault,DNS:vault.spire,DNS:vault.spire.svc,DNS:vault.spire.svc.cluster.local,DNS:localhost,IP:127.0.0.1")
+
+      # Create Kubernetes secret
+      kubectl create secret generic vault-tls \
+        --from-file=ca.crt=/tmp/vault-tls/ca.crt \
+        --from-file=tls.crt=/tmp/vault-tls/tls.crt \
+        --from-file=tls.key=/tmp/vault-tls/tls.key \
+        -n spire
+
+      echo "Vault TLS certificates created and stored in vault-tls secret"
+
+      # Wait for Vault to restart with TLS enabled
+      echo "Waiting for Vault pod to restart with TLS..."
+      sleep 30
+    else
+      echo "Vault TLS certificates already exist"
+    fi
+
+    export VAULT_ADDR='https://vault:8200'
+    export VAULT_CACERT='/tmp/vault-tls/ca.crt'
+
+    # Extract CA from secret for local use
+    kubectl get secret vault-tls -n spire -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/vault-tls/ca.crt
 
     echo "Waiting for Vault..."
-    until curl -s $VAULT_ADDR/v1/sys/health > /dev/null; do
+    until curl -k -s $VAULT_ADDR/v1/sys/health > /dev/null 2>&1; do
       sleep 2
     done
-    
+
     echo "Vault is reachable. Checking status..."
 
-    INIT_STATUS=$(curl -s $VAULT_ADDR/v1/sys/init | jq -r .initialized)
+    INIT_STATUS=$(curl -k -s $VAULT_ADDR/v1/sys/init | jq -r .initialized)
 
     if [ "$INIT_STATUS" = "false" ]; then
       echo "Initializing Vault..."
-    
+
       INIT_JSON=$(vault operator init -key-shares=1 -key-threshold=1 -format=json)
       UNSEAL_KEY=$(echo $INIT_JSON | jq -r ".unseal_keys_b64[0]")
       ROOT_TOKEN=$(echo $INIT_JSON | jq -r ".root_token")
-    
+
       kubectl create secret generic vault-recovery-keys \
         --from-literal=unseal_key=$UNSEAL_KEY \
         --from-literal=root_token=$ROOT_TOKEN \
         -n spire --dry-run=client -o yaml | kubectl apply -f -
-    
+
       echo "Vault Initialized. Keys saved to 'vault-recovery-keys' secret."
     else
       echo "Vault already initialized. Fetching keys from secret..."
@@ -164,11 +232,11 @@ data:
     export VAULT_TOKEN=$ROOT_TOKEN
 
     echo "Configuring PKI (Idempotent)..."
-    
+
     if ! vault secrets list | grep -q "pki_root/"; then
         vault secrets enable -path=pki_root pki
         vault secrets tune -max-lease-ttl=87600h pki_root
-    
+
         vault write pki_root/root/generate/internal \
             common_name="SPIRE Root CA" \
             ttl=87600h \
@@ -188,11 +256,11 @@ data:
 
     echo "Generating/Refreshing Client Certs..."
     mkdir -p certs
-    
+
     openssl genrsa -out certs/client.key 4096
     openssl req -new -key certs/client.key -out certs/client.csr \
         -subj "/CN=spire-server/O=SPIRE"
-    
+
     openssl x509 -req -in certs/client.csr \
         -signkey certs/client.key \
         -out certs/client.crt \
@@ -219,9 +287,13 @@ data:
 
     vault read -field=certificate pki_root/cert/ca > certs/ca.crt
 
+    # Get Vault's TLS CA for SPIRE
+    kubectl get secret vault-tls -n spire -o jsonpath='{.data.ca\.crt}' | base64 -d > certs/vault-ca.crt
+
     echo "Updating Kubernetes Secret..."
     kubectl create secret generic vault-certs \
       --from-file=ca.crt=certs/ca.crt \
+      --from-file=vault-ca.crt=certs/vault-ca.crt \
       --from-file=client.crt=certs/client.crt \
       --from-file=client.key=certs/client.key \
       -n spire --dry-run=client -o yaml | kubectl apply -f -

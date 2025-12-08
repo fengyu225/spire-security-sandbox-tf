@@ -54,9 +54,8 @@ data:
       UpstreamAuthority "vault" {
         plugin_data {
           vault_addr = "https://vault:8200"
-          insecure_skip_verify = true
           pki_mount_point = "pki_root"
-          ca_cert_path = "/run/spire/vault-certs/ca.crt"
+          ca_cert_path = "/run/spire/vault-certs/vault-ca.crt"
           cert_auth {
             cert_auth_mount_point = "cert"
             client_cert_path = "/run/spire/vault-certs/client.crt"
