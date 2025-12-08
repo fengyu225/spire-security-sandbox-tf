@@ -112,3 +112,48 @@ module "ebs_csi_irsa_role" {
     }
   }
 }
+
+resource "aws_iam_role" "boundary_test_role" {
+  name                 = "BoundaryTestRole"
+  permissions_boundary = aws_iam_policy.mandatory_permission_boundary.arn
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = module.eks.oidc_provider_arn
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "${module.eks.oidc_provider}:sub" = "system:serviceaccount:app:boundary-test-sa",
+            "${module.eks.oidc_provider}:aud" = "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "boundary_test_policy" {
+  name = "AllowEverything"
+  role = aws_iam_role.boundary_test_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "rds-db:connect"
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = "rds:*"
+        Resource = "*"
+      }
+    ]
+  })
+}
