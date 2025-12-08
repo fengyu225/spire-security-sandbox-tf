@@ -10,7 +10,7 @@ data:
     allow_insecure_scheme = true
     insecure_addr = ":8080"
     workload_api {
-      socket_path = "/run/spire/agent-sockets/socket" 
+      socket_path = "/run/spire/agent-sockets/socket"
       trust_domain = "example.org"
     }
     health_checks {

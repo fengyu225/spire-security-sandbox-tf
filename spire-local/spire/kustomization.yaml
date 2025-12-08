@@ -25,3 +25,4 @@ resources:
   - rbac/clusterrolebindings.yaml
   - rbac/roles.yaml
   - rbac/rolebindings.yaml
+  - sc.yaml

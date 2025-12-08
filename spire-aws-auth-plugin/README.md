@@ -2,8 +2,7 @@
 
 A SPIRE CredentialComposer plugin that enables fine-grained AWS IAM Role assumption for SPIFFE-identified workloads. It injects specific OIDC claims (`aud`, `azp`, session tags, and source identity) into JWT-SVIDs based on authorization rules stored in S3.
 
-This plugin allows workloads to assume IAM roles based on their SPIFFE identity. 
-
+This plugin allows workloads to assume IAM roles based on their SPIFFE identity.
 ## Architecture
 
 The plugin acts as a Policy Enforcement Point (PEP) during JWT issuance:
@@ -102,12 +101,12 @@ Configure IAM Role with the following trust policy to accept the SPIRE-issued to
   "Statement": [
     {
       "Effect": "Allow",
-      "Principal": { 
-        "Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/<OIDC_URL>" 
+      "Principal": {
+        "Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/<OIDC_URL>"
       },
       "Action": [
-        "sts:AssumeRoleWithWebIdentity", 
-        "sts:TagSession", 
+        "sts:AssumeRoleWithWebIdentity",
+        "sts:TagSession",
         "sts:SetSourceIdentity"
       ],
       "Condition": {
