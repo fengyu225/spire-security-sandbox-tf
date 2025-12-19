@@ -10,10 +10,10 @@ resource "aws_s3_bucket" "oidc" {
 resource "aws_s3_bucket_public_access_block" "oidc" {
   bucket = aws_s3_bucket.oidc.id
 
-  block_public_acls       = false
-  ignore_public_acls      = false
-  block_public_policy     = false
-  restrict_public_buckets = false
+  block_public_acls       = true
+  ignore_public_acls      = true
+  block_public_policy     = true
+  restrict_public_buckets = true
 }
 
 resource "aws_s3_bucket_policy" "oidc" {
@@ -23,11 +23,18 @@ resource "aws_s3_bucket_policy" "oidc" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "PublicReadGetObject"
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.oidc.arn}/*"
+        Sid    = "AllowCloudFrontOAC"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.oidc.arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.oidc.arn
+          }
+        }
       },
       {
         Sid    = "AllowSpireServerPublish"
@@ -55,9 +62,10 @@ resource "aws_s3_object" "openid_config" {
   key          = ".well-known/openid-configuration"
   content_type = "application/json"
 
+  # DYNAMIC URL: We now point to the CloudFront domain
   content = jsonencode({
-    issuer                                = local.oidc_url
-    jwks_uri                              = "${local.oidc_url}/keys"
+    issuer                                = "https://${aws_cloudfront_distribution.oidc.domain_name}"
+    jwks_uri                              = "https://${aws_cloudfront_distribution.oidc.domain_name}/keys"
     authorization_endpoint                = ""
     response_types_supported              = ["id_token"]
     subject_types_supported               = []
