@@ -38,6 +38,6 @@ output "auditor_console_url" {
   value       = "https://${data.aws_caller_identity.current.account_id}.signin.aws.amazon.com/console"
 }
 
-output "bypass_role_arn" {
-  value = aws_iam_role.bypass.arn
-}
+# output "bypass_role_arn" {
+#   value = aws_iam_role.bypass.arn
+# }
