@@ -1,5 +1,6 @@
 resource "aws_iam_role" "bypass" {
   name = "BypassSpireRole"
+  permissions_boundary = aws_iam_policy.mandatory_permission_boundary.arn
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
